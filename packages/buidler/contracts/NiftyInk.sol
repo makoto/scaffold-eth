@@ -47,6 +47,9 @@ contract NiftyInk is BaseRelayRecipient, Ownable, SignatureChecker {
       uint256 limit;
       bytes signature;
       uint256 price;
+      uint256 startPrice;
+      uint256 duration;
+      uint256 startAt;
       Counters.Counter priceNonce;
     }
 
@@ -103,11 +106,21 @@ contract NiftyInk is BaseRelayRecipient, Ownable, SignatureChecker {
     }
 
     function _setPrice(uint256 _inkId, uint256 price) private returns (uint256) {
-
       _inkById[_inkId].price = price;
       _inkById[_inkId].priceNonce.increment();
 
       return price;
+    }
+
+    function _setAuctionPrice(uint256 _inkId, uint256 _startPrice, uint256 _duration) private returns (uint256) {
+      _inkById[_inkId].startPrice = _startPrice;
+      _inkById[_inkId].duration = _duration;
+      _inkById[_inkId].startAt = now;
+    }
+
+    function setAuctionPrice(string memory inkUrl, uint256 price, uint256 _startPrice, uint256 _duration) public returns (uint256) {
+      return setPrice(inkUrl, price);
+      return _setAuctionPrice(_inkById[inkIdByInkUrl[inkUrl]].id, _startPrice, _duration);
     }
 
     function setPrice(string memory inkUrl, uint256 price) public returns (uint256) {
@@ -130,12 +143,21 @@ contract NiftyInk is BaseRelayRecipient, Ownable, SignatureChecker {
       return _setPrice(_ink.id, price);
     }
 
+    function getPrice(uint256 _inkId) public view returns(uint256){
+      uint256 endAt = _inkById[_inkId].startAt + _inkById[_inkId].duration;
+      // Auction is either not set or finished
+      if(_inkById[_inkId].startAt == 0 || endAt > now){
+        return _inkById[_inkId].price;
+      }else{
+        return _inkById[_inkId].startPrice - _inkById[_inkId].price / _inkById[_inkId].duration * (endAt - now);
+      }
+    }
 
     function inkInfoById(uint256 id) public view returns (uint256, address, string memory, bytes memory, uint256, uint256, string memory, uint256) {
       require(id > 0 && id <= totalInks.current(), "this ink does not exist!");
       Ink storage _ink = _inkById[id];
-
-      return (id, _ink.artist, _ink.jsonUrl, _ink.signature, _ink.price, _ink.limit, _ink.inkUrl, _ink.priceNonce.current());
+      uint256 _price = getPrice(id);
+      return (id, _ink.artist, _ink.jsonUrl, _ink.signature, _price, _ink.limit, _ink.inkUrl, _ink.priceNonce.current());
     }
 
     function inkInfoByInkUrl(string memory inkUrl) public view returns (uint256, address, string memory, bytes memory, uint256, uint256, string memory, uint256) {
